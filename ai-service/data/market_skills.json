@@ -1,0 +1,37 @@
+{
+  "Software Engineer": [
+    "Data Structures", "Algorithms", "System Design", "OOP",
+    "Java", "Python", "C++", "SQL", "Git", "Linux",
+    "REST APIs", "Microservices", "Docker", "AWS"
+  ],
+  "Full Stack Developer": [
+    "JavaScript", "TypeScript", "React", "Node.js", "HTML", "CSS",
+    "SQL", "PostgreSQL", "MongoDB", "REST APIs", "Git",
+    "Docker", "AWS", "System Design"
+  ],
+  "Data Engineer": [
+    "Python", "SQL", "Spark", "Hadoop", "Airflow",
+    "AWS", "GCP", "Kafka", "ETL", "Data Modeling",
+    "PostgreSQL", "MongoDB", "Snowflake", "dbt"
+  ],
+  "ML Engineer": [
+    "Python", "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch",
+    "scikit-learn", "SQL", "Statistics", "Linear Algebra",
+    "Docker", "AWS", "MLflow", "Feature Engineering", "Data Structures"
+  ],
+  "DevOps Engineer": [
+    "Linux", "Docker", "Kubernetes", "AWS", "GCP", "Azure",
+    "Terraform", "Ansible", "CI/CD", "Jenkins", "Git",
+    "Python", "Bash", "Networking", "Monitoring"
+  ],
+  "Frontend Developer": [
+    "JavaScript", "TypeScript", "React", "HTML", "CSS",
+    "Tailwind CSS", "Next.js", "Git", "REST APIs",
+    "Webpack", "Vite", "Testing", "Accessibility"
+  ],
+  "Backend Developer": [
+    "Python", "Java", "Node.js", "SQL", "PostgreSQL",
+    "MongoDB", "REST APIs", "GraphQL", "Docker",
+    "AWS", "System Design", "Git", "Microservices", "Redis"
+  ]
+}

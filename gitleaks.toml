@@ -1,0 +1,59 @@
+# Guardian AI — Gitleaks Configuration
+# Customises what gitleaks considers a secret leak.
+# Reference: https://github.com/gitleaks/gitleaks
+
+title = "Guardian AI Gitleaks Config"
+
+# ── Extend the default ruleset ────────────────────────────────────────────────
+[extend]
+useDefault = true   # inherit all built-in rules (AWS, GCP, GitHub, etc.)
+
+# ── Project-specific rules ────────────────────────────────────────────────────
+
+[[rules]]
+id          = "neon-postgres-url"
+description = "Neon Postgres connection URL (contains credentials)"
+regex       = '''postgres(?:ql)?://[^:]+:[^@]+@[^/]+\.neon\.tech'''
+tags        = ["database", "credentials"]
+
+[[rules]]
+id          = "cloudflare-r2-secret"
+description = "Cloudflare R2 / S3-compatible secret access key assignment"
+regex       = '''(?i)(r2|cloudflare|s3)[_-]?secret[_-]?(?:access[_-]?)?key\s*=\s*['"][A-Za-z0-9/+]{30,}['"]'''
+tags        = ["cloud-storage", "credentials"]
+
+[[rules]]
+id          = "jwt-secret"
+description = "JWT signing secret assignment"
+regex       = '''(?i)jwt[_-]?secret\s*=\s*['"][^'"]{8,}['"]'''
+tags        = ["auth", "credentials"]
+
+[[rules]]
+id          = "gmail-encryption-key"
+description = "Gmail encryption key (64-hex AES-256 key)"
+regex       = '''(?i)gmail[_-]?encryption[_-]?key\s*=\s*['"]?[0-9a-fA-F]{64}['"]?'''
+tags        = ["encryption", "credentials"]
+
+[[rules]]
+id          = "health-encryption-key"
+description = "Health data encryption key"
+regex       = '''(?i)health[_-]?encryption[_-]?key\s*=\s*['"]?[0-9a-fA-F]{64}['"]?'''
+tags        = ["encryption", "credentials"]
+
+# ── Allowlist: intentional test/example values ───────────────────────────────
+
+[allowlist]
+description = "Files that should never be scanned"
+paths       = [
+  '''.env\.example''',
+  '''\.pre-commit-config\.yaml''',
+  '''gitleaks\.toml''',
+]
+
+# Allow placeholder values that look like secrets but are not
+regexes = [
+  '''YOUR_.*_HERE''',
+  '''CHANGE_ME''',
+  '''example\.com''',
+  '''localhost''',
+]

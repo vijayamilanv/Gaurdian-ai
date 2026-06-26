@@ -1,0 +1,357 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                   String                @id @default(uuid())
+  name                 String
+  email                String                @unique
+  passwordHash         String
+  createdAt            DateTime              @default(now())
+  skills               Skill[]
+  projects             Project[]
+  activities           Activity[]
+  predictions          Prediction[]
+  resumes              Resume[]
+  profile              Profile?
+  applications         Application[]
+  notes                Note[]
+  fileAssets           FileAsset[]
+  emailLogs            EmailLog[]
+  emailSyncCredential  EmailSyncCredential?
+  agentLogs            AgentLog[]
+  mockInterviewSessions MockInterviewSession[]
+  scheduleDays         ScheduleDay[]
+  subjects             Subject[]
+  testSubmissions      TestSubmission[]
+  healthConsent        HealthConsent?
+  healthReports        HealthReport[]
+  dietPlans            DietPlan[]
+  escalations          GuardianEscalation[]
+  notificationSettings NotificationSettings?
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cgpa        Float?
+  attendance  Float?
+  dsaSolved   Int?
+  targetRoles String[]
+  updatedAt   DateTime @updatedAt
+}
+
+model Skill {
+  id          String @id @default(uuid())
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillName   String
+  proficiency Int    // 1-5
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  techStack   String[]
+}
+
+model Activity {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "study" | "coding" | "sleep" | "work" | ...
+  hours     Float
+  date      DateTime
+}
+
+model Resume {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileUrl   String
+  atsScore  Int?
+  parsedAt  DateTime?
+}
+
+model Prediction {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  riskType    String   // "placement" | "backlog" | "burnout" | "project_failure"
+  probability Float
+  createdAt   DateTime @default(now())
+}
+
+// ── Placement Hub Models (Sub-Phase A) ────────────────────────────────────────
+
+model Application {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  role        String?
+  status      String           @default("applied") // applied | interview | offer | rejected
+  appliedDate DateTime?
+  package     String?
+  location    String?
+  rounds      InterviewRound[]
+  notes       Note[]
+  fileAssets  FileAsset[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model InterviewRound {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  roundName     String      // "OA" | "Technical 1" | "HR"
+  scheduledDate DateTime?
+  result        String?     // pending | passed | failed
+  feedback      String?
+  reminderSent  Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+}
+
+model Note {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  roundId       String?
+  title         String?
+  content       String       // markdown
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model FileAsset {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  label         String
+  type          String       // certificate | resume | offer_letter | resource | other
+  r2Key         String
+  mimeType      String?
+  sizeBytes     Int?
+  isShared      Boolean      @default(false)
+  folder        String?
+  createdAt     DateTime     @default(now())
+}
+
+model EmailLog {
+  id                  String      @id @default(uuid())
+  userId              String
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailMessageId      String      @unique
+  sender              String?
+  subject             String?
+  snippet             String?
+  body                String?     // plain-text body (first 2000 chars)
+  receivedAt          DateTime?
+  isImportant         Boolean     @default(false)
+  label               String?     // OA | OL | REJECT | GHOST | INFO
+  classifiedBy        String?     // keyword | llm
+  linkedApplicationId String?     // FK to Application if auto-matched
+  createdAt           DateTime    @default(now())
+}
+
+model EmailSyncCredential {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email           String                         // the Google account email
+  accessTokenEnc  String?                        // AES-256-GCM encrypted access token
+  refreshTokenEnc String                         // AES-256-GCM encrypted refresh token
+  tokenExpiry     DateTime?                      // when access token expires
+  scope           String    @default("gmail.readonly")
+  lastSyncedAt    DateTime?
+}
+
+model AgentLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // resume_review | mock_interview | prep | chat
+  input     String?
+  output    String?
+  createdAt DateTime @default(now())
+}
+
+model MockInterviewSession {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic        String
+  transcript   Json      @default("[]") // [{ question, answer, feedback }]
+  overallScore Int?      // 0-100, set on completion
+  weakAreas    Json?     // ["System Design depth", "Behavioral STAR"] — set by Critic
+  actionPlan   Json?     // { daily: [...], weekly: [...], monthly: [...] } — set by Planner
+  status       String    @default("in_progress") // in_progress | completed
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+}
+
+// ── Phase 5b: Scheduler ───────────────────────────────────────────────────────
+
+model ScheduleDay {
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime        // stored as date-only (time truncated to 00:00:00 UTC)
+  blocks          ScheduleBlock[]
+  generatedReason String?         // e.g. "Recalibrated after 2 low-completion days"
+  createdAt       DateTime        @default(now())
+
+  @@unique([userId, date])
+}
+
+model ScheduleBlock {
+  id          String      @id @default(uuid())
+  dayId       String
+  day         ScheduleDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  startTime   String      // "06:00"
+  endTime     String      // "07:00"
+  activity    String
+  category    String      // weak_area_practice | job_readiness | diet | exam_prep | rest
+  sourceType  String?     // mock_interview | predictor | exam_submission | diet_plan | manual
+  sourceId    String?     // id of the originating record, for traceability
+  isDone      Boolean     @default(false)
+  completedAt DateTime?
+}
+
+// ── Phase 5c: Semester Exam Prep ──────────────────────────────────────────────
+
+model Subject {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  semester  String?         // e.g. "Sem 5"
+  materials StudyMaterial[]
+  tests     ModelTest[]
+  createdAt DateTime        @default(now())
+
+  @@unique([userId, name])
+}
+
+model StudyMaterial {
+  id          String  @id @default(uuid())
+  subjectId   String
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  fileAssetId String  // FK into FileAsset (R2)
+  type        String  // "notes" | "pyq"
+  label       String? // e.g. "2023 Mid-Sem"
+  uploadedAt  DateTime @default(now())
+}
+
+model ModelTest {
+  id          String           @id @default(uuid())
+  subjectId   String
+  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  questions   Json             // [{ no, question, marks, modelAnswer }]
+  totalMarks  Int
+  status      String           @default("ready")  // ready | submitted | evaluated
+  createdAt   DateTime         @default(now())
+  submissions TestSubmission[]
+}
+
+model TestSubmission {
+  id              String    @id @default(uuid())
+  testId          String
+  test            ModelTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answerFileId    String?   // FileAsset id for uploaded answer sheet (handwritten image)
+  answerText      String?   // typed answer (alternative to file upload)
+  totalScore      Float?
+  maxScore        Int?
+  perQuestion     Json?     // [{ no, awarded, feedback }]
+  overallFeedback String?
+  status          String    @default("pending") // pending | evaluated
+  submittedAt     DateTime  @default(now())
+  evaluatedAt     DateTime?
+}
+
+// ── Phase 6a: Health & Diet ───────────────────────────────────────────────────
+
+/// Explicit informed-consent gate — must exist before any health data is stored.
+/// GDPR/compliance layer: records what the user agreed to, and when.
+model HealthConsent {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agreedAt    DateTime @default(now())
+  revokedAt   DateTime?
+  consentText String                     // the exact consent string shown to user
+}
+
+/// Encrypted medical report upload.
+/// dataEnc: AES-256-GCM ciphertext (iv.enc.tag) of raw report text / OCR text.
+/// metricsEnc: AES-256-GCM ciphertext of structured JSON metrics extracted by AI.
+/// Raw text is NEVER stored in plaintext — only in encrypted form.
+model HealthReport {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String?                    // e.g. "Annual Checkup 2025"
+  dataEnc    String                     // AES-256-GCM encrypted raw report text
+  metricsEnc String?                    // AES-256-GCM encrypted structured metrics JSON
+  uploadedAt DateTime  @default(now())
+  dietPlans  DietPlan[]
+}
+
+/// AI-generated diet plan based on health metrics.
+/// planEnc: AES-256-GCM encrypted JSON { days: [{ day, meals: [...], macros }] }
+model DietPlan {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportId     String?
+  report       HealthReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  planEnc      String                   // AES-256-GCM encrypted plan JSON
+  summaryText  String?                  // unencrypted one-line summary (safe to display)
+  generatedAt  DateTime     @default(now())
+}
+
+// ── Phase 6b Extensions ───────────────────────────────────────────────────────
+
+/// Escalation events — logged when burnout/diet/schedule triggers fire.
+/// Each escalation is surfaced in the Guardian Companion with human-support messaging.
+model GuardianEscalation {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trigger         String    // high_burnout_score | low_schedule_completion | no_applications | critical_health
+  severity        String    @default("orange")  // yellow | orange | red
+  message         String                         // human-readable escalation message
+  supportLink     String?                        // optional counsellor / resource link
+  createdAt       DateTime  @default(now())
+  acknowledgedAt  DateTime?                      // null = unacknowledged
+}
+
+/// Per-user notification opt-in toggles (checked before sending any proactive nudge).
+model NotificationSettings {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleNudges        Boolean  @default(true)   // morning briefing, missed-day alert
+  placementNudges       Boolean  @default(true)   // no-app streak, OA deadline
+  examNudges            Boolean  @default(true)   // exam prep reminders
+  healthNudges          Boolean  @default(false)  // off by default — opt-in only
+  accountabilitySummary Boolean  @default(false)  // weekly summary to accountability contact
+  accountabilityEmail   String?                   // contact email (opt-in, consent-gated)
+  updatedAt             DateTime @updatedAt
+}

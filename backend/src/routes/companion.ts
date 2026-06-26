@@ -167,8 +167,8 @@ export default async function companionRoutes(fastify: FastifyInstance) {
       return reply.status(502).send({ message: `AI error: ${text}` } as any);
     }
 
-    const briefing = await aiRes.json();
-    return reply.send({ ...briefing, _context: ctx });
+    const briefing = await aiRes.json() as Record<string, unknown>;
+    return reply.send({ ...(briefing as object), _context: ctx });
   });
 
   // ── GET /api/companion/nudges ─────────────────────────────────────────────

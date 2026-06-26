@@ -316,7 +316,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
           data: {
             overallScore: data.overall_score,
             weakAreas:    data.weak_areas,
-            actionPlan:   data.action_plan,
+            actionPlan:   data.action_plan as any,
             status:       "completed",
             completedAt:  new Date(),
           },

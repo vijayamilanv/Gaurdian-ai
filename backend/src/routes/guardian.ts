@@ -298,7 +298,7 @@ export default async function guardianRoutes(fastify: FastifyInstance) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        interview_weak_areas: prediction?.weakAreas ?? [],
+        interview_weak_areas: (prediction as any)?.weakAreas ?? [],
         missed_task_days:     ctx.missed_days,
         target_date:          new Date().toISOString().slice(0, 10),
         cgpa:                 profile?.cgpa ?? null,

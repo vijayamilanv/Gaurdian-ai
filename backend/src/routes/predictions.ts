@@ -40,24 +40,17 @@ export default async function predictionsRoutes(fastify: FastifyInstance) {
       // ── Sub-Phase D: application tracker signals ────────────────────────────
       const applications = await server.db.application.findMany({
         where: { userId },
-        include: { interviewRounds: true },
-        orderBy: { appliedAt: "desc" },
+        orderBy: { appliedDate: "desc" },
       });
 
       const activeApps = applications.filter(
         (a) => !["rejected", "ghosted", "withdrawn"].includes(a.status)
       ).length;
 
-      // Count all interview rounds and passed rounds
-      const allRounds = applications.flatMap((a) => a.interviewRounds);
-      const roundsCompleted = allRounds.length;
-      const passedRounds = allRounds.filter((r) => r.outcome === "pass").length;
-      const roundPassRate = roundsCompleted > 0 ? passedRounds / roundsCompleted : null;
-
       // Days since last application submitted
-      const lastApp = applications[0]; // already ordered by appliedAt desc
-      const daysSinceLastApp = lastApp
-        ? Math.floor((Date.now() - new Date(lastApp.appliedAt).getTime()) / 86_400_000)
+      const lastApp = applications[0]; // already ordered by appliedDate desc
+      const daysSinceLastApp = lastApp?.appliedDate
+        ? Math.floor((Date.now() - new Date(lastApp.appliedDate).getTime()) / 86_400_000)
         : null;
       // ── End Sub-Phase D ─────────────────────────────────────────────────────
 
@@ -79,8 +72,6 @@ export default async function predictionsRoutes(fastify: FastifyInstance) {
         })),
         // Application signals
         active_apps:          activeApps,
-        rounds_completed:     roundsCompleted || null,
-        round_pass_rate:      roundPassRate,
         days_since_last_app:  daysSinceLastApp,
       };
 
@@ -114,7 +105,7 @@ export default async function predictionsRoutes(fastify: FastifyInstance) {
         );
       }
 
-      return reply.status(200).send({ result });
+      return reply.status(200).send({ result: result as any });
     }
   );
 

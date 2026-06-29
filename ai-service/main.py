@@ -121,35 +121,36 @@ def skill_gap_endpoint(req: SkillGapRequest):
 
 from pydantic import BaseModel
 from typing import List, Optional
-import google.generativeai as genai_conv
+from openai import OpenAI
 
-_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
-if _GEMINI_KEY:
-    genai_conv.configure(api_key=_GEMINI_KEY)
+_XAI_KEY = os.getenv("XAI_API_KEY", "")
+_grok_client: OpenAI | None = None
+
+def _get_client() -> OpenAI:
+    global _grok_client
+    if not _XAI_KEY:
+        raise HTTPException(status_code=503, detail="XAI_API_KEY not configured")
+    if _grok_client is None:
+        _grok_client = OpenAI(api_key=_XAI_KEY, base_url="https://api.x.ai/v1")
+    return _grok_client
 
 def _call_llm(system: str, messages: list, temperature: float = 0.7) -> str:
-    """Unified LLM caller — uses google-generativeai (same package as the main pipeline)."""
-    if not _GEMINI_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+    """Unified LLM caller — uses Grok (xAI) via OpenAI-compatible API."""
+    client = _get_client()
 
-    model = genai_conv.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=system,
+    # Build messages in OpenAI format
+    openai_msgs: list = [{"role": "system", "content": system}]
+    for m in messages:
+        role = "assistant" if m["role"] in ("model", "assistant") else "user"
+        openai_msgs.append({"role": role, "content": m["content"]})
+
+    response = client.chat.completions.create(
+        model="grok-3-mini",
+        messages=openai_msgs,
+        temperature=temperature,
     )
+    return response.choices[0].message.content or ""
 
-    # Build history (all but the last message) then send the last one
-    history_gc = []
-    for m in messages[:-1]:
-        role = "user" if m["role"] == "user" else "model"
-        history_gc.append({"role": role, "parts": [m["content"]]})
-
-    chat = model.start_chat(history=history_gc)
-    last_msg = messages[-1]["content"] if messages else "Hello"
-    response = chat.send_message(
-        last_msg,
-        generation_config={"temperature": temperature},
-    )
-    return response.text
 
 
 class ConvMessage(BaseModel):
@@ -195,8 +196,8 @@ def mock_interview(req: MockInterviewRequest) -> dict:
         raise
     except Exception as e:
         err_str = str(e)
-        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str:
-            return {"response": "⚠️ The Gemini API key is not valid. Please update GEMINI_API_KEY in the ai-service .env file with a fresh key from https://aistudio.google.com/apikey and restart the AI service."}
+        if "invalid_api_key" in err_str.lower() or "api key" in err_str.lower() or "authentication" in err_str.lower():
+            return {"response": "⚠️ The Grok API key is not valid. Please update XAI_API_KEY in the ai-service environment with a fresh key from https://console.x.ai and redeploy."}
         raise HTTPException(status_code=500, detail=err_str)
 
 
@@ -225,8 +226,8 @@ def aptitude_prep(req: PrepRequest) -> dict:
         raise
     except Exception as e:
         err_str = str(e)
-        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str:
-            return {"response": "⚠️ The Gemini API key is not valid. Please update GEMINI_API_KEY in ai-service/.env and restart the AI service."}
+        if "invalid_api_key" in err_str.lower() or "api key" in err_str.lower() or "authentication" in err_str.lower():
+            return {"response": "⚠️ The Grok API key is not valid. Please update XAI_API_KEY and redeploy the AI service."}
         raise HTTPException(status_code=500, detail=err_str)
 
 
@@ -270,8 +271,8 @@ def critic_agent(req: CriticRequest) -> dict:
         }
     except Exception as e:
         err_str = str(e)
-        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str:
-            return {"overall_score": 50, "weak_areas": ["⚠️ Gemini API key invalid — critique unavailable"], "summary": "API key invalid."}
+        if "invalid_api_key" in err_str.lower() or "api key" in err_str.lower() or "authentication" in err_str.lower():
+            return {"overall_score": 50, "weak_areas": ["⚠️ Grok API key invalid — critique unavailable"], "summary": "API key invalid."}
         raise HTTPException(status_code=500, detail=f"Critic failed: {err_str}")
 
 
@@ -371,8 +372,8 @@ def resume_review(req: ResumeReviewRequest) -> dict:
         }
     except Exception as e:
         err_str = str(e)
-        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str:
-            raise HTTPException(status_code=503, detail="Gemini API key not valid. Please update ai-service/.env.")
+        if "invalid_api_key" in err_str.lower() or "api key" in err_str.lower() or "authentication" in err_str.lower():
+            raise HTTPException(status_code=503, detail="Grok API key not valid. Please update XAI_API_KEY.")
         # JSON parse error — return raw text wrapped
         raise HTTPException(status_code=500, detail=f"Resume review failed: {err_str}")
 
@@ -466,7 +467,7 @@ def generate_test(req: GenerateTestRequest) -> dict:
         }
     except Exception as e:
         err = str(e)
-        if "API_KEY_INVALID" in err or "API key not valid" in err:
+        if "invalid_api_key" in err.lower() or "api key" in err.lower() or "authentication" in err.lower():
             raise HTTPException(status_code=503, detail="Gemini API key invalid")
         raise HTTPException(status_code=500, detail=f"Test generation failed: {err}")
 
@@ -490,23 +491,24 @@ def evaluate_submission(req: EvaluateRequest) -> dict:
     """
     student_text = req.answer_text.strip()
 
-    # OCR path: use Gemini multimodal to transcribe handwritten image
+    # OCR path: use Grok vision to transcribe handwritten image
     if not student_text and req.answer_image_b64:
-        if not _GEMINI_KEY:
-            raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+        if not _XAI_KEY:
+            raise HTTPException(status_code=503, detail="XAI_API_KEY not configured")
         try:
-            import base64 as _b64
-            import google.generativeai as _genai_mm
-            import google.generativeai.types as _types
-            _genai_mm.configure(api_key=_GEMINI_KEY)
-            mm_model = _genai_mm.GenerativeModel("gemini-1.5-flash")
-            image_bytes = _b64.b64decode(req.answer_image_b64)
-            ocr_resp = mm_model.generate_content([
-                "You are an OCR engine. Transcribe this handwritten exam answer sheet "
-                "exactly as written, preserving question numbering. Output raw text only.",
-                _types.Part.from_bytes(image_bytes, mime_type="image/jpeg"),
-            ])
-            student_text = ocr_resp.text.strip()
+            vision_client = _get_client()
+            ocr_resp = vision_client.chat.completions.create(
+                model="grok-2-vision-1212",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "You are an OCR engine. Transcribe this handwritten exam answer sheet exactly as written, preserving question numbering. Output raw text only."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{req.answer_image_b64}"}},
+                    ],
+                }],
+                temperature=0.1,
+            )
+            student_text = (ocr_resp.choices[0].message.content or "").strip()
         except Exception as ocr_err:
             raise HTTPException(status_code=500, detail=f"OCR failed: {ocr_err}")
 
@@ -551,7 +553,7 @@ def evaluate_submission(req: EvaluateRequest) -> dict:
         }
     except Exception as e:
         err = str(e)
-        if "API_KEY_INVALID" in err or "API key not valid" in err:
+        if "invalid_api_key" in err.lower() or "api key" in err.lower() or "authentication" in err.lower():
             raise HTTPException(status_code=503, detail="Gemini API key invalid")
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {err}")
 
@@ -597,7 +599,7 @@ def analyze_health_report(req: HealthAnalyzeRequest) -> dict:
         }
     except Exception as e:
         err = str(e)
-        if "API_KEY_INVALID" in err or "API key not valid" in err:
+        if "invalid_api_key" in err.lower() or "api key" in err.lower() or "authentication" in err.lower():
             raise HTTPException(status_code=503, detail="Gemini API key invalid")
         raise HTTPException(status_code=500, detail=f"Health analysis failed: {err}")
 
@@ -675,7 +677,7 @@ def generate_diet_plan(req: DietPlanRequest) -> dict:
         }
     except Exception as e:
         err = str(e)
-        if "API_KEY_INVALID" in err or "API key not valid" in err:
+        if "invalid_api_key" in err.lower() or "api key" in err.lower() or "authentication" in err.lower():
             raise HTTPException(status_code=503, detail="Gemini API key invalid")
         raise HTTPException(status_code=500, detail=f"Diet plan generation failed: {err}")
 
